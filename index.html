@@ -2919,7 +2919,39 @@ const _origPersistInsp = persistInsp;
 persistInsp = function(){
   _origPersistInsp();
   const k = monthKey();
-  enqueueSync('inspecoes', 'upsert', { id: k, month_key: k, data: INSPECOES[k] || {} });
+  const mesData = INSPECOES[k] || {};
+  const exts = getExtintores();
+  const rows = [];
+
+  // Para cada área, para cada extintor inspecionado → 1 linha
+  for(let a = 1; a <= 8; a++){
+    const areaInsp = mesData[a] || {};
+    Object.entries(areaInsp).forEach(([extId, insp]) => {
+      if(!insp || typeof insp !== 'object') return;
+      const ext = exts.find(e => e.id === extId) || {};
+      rows.push({
+        id: `${k}_${extId}`,
+        mes: k,
+        area: a,
+        extintor_id: extId,
+        local_extintor: ext.local || '',
+        tipo: ext.tipo || '',
+        status: insp.ok ? 'ok' : 'obs',
+        obs: insp.obs || '',
+        tecnico: TECNICOS[a] || '',
+        assinatura: insp.assinatura || '',
+        dt_assinatura: insp.dt_assinatura || null,
+        updated_at: new Date().toISOString()
+      });
+    });
+  }
+
+  if(rows.length > 0){
+    // Envia em lotes de 50 para não estourar o limite do Supabase
+    for(let i = 0; i < rows.length; i += 50){
+      enqueueSync('inspecoes', 'upsert', rows.slice(i, i + 50));
+    }
+  }
 };
 
 const _origSaveExtintores = saveExtintoresStorage;
@@ -2994,6 +3026,10 @@ async function renderNuvem(){
     </button>` : ''}
     <button class="export-btn" onclick="idbClearDone().then(renderNuvem)">Limpar enviados</button>
     <button class="export-btn" onclick="retryAllFailed()">Tentar falhas novamente</button>
+    <button class="export-btn" onclick="forceSyncAllInspecoes()" title="Envia todos os registros de inspeção do dispositivo para o Supabase — útil para migração">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg>
+      Subir histórico completo
+    </button>
   </div>`;
   html += actionRow;
 
@@ -3055,6 +3091,44 @@ async function retryAllFailed(){
   }
   drainSyncQueue();
   renderNuvem();
+}
+
+// Força o envio de TODAS as inspeções locais para o Supabase
+// Útil após migração da estrutura ou para subir dados históricos
+async function forceSyncAllInspecoes(){
+  const exts = getExtintores();
+  let totalRows = 0;
+  for(const [k, mesData] of Object.entries(INSPECOES)){
+    const rows = [];
+    for(let a = 1; a <= 8; a++){
+      const areaInsp = mesData[a] || {};
+      Object.entries(areaInsp).forEach(([extId, insp]) => {
+        if(!insp || typeof insp !== 'object') return;
+        const ext = exts.find(e => e.id === extId) || {};
+        rows.push({
+          id: `${k}_${extId}`,
+          mes: k,
+          area: a,
+          extintor_id: extId,
+          local_extintor: ext.local || '',
+          tipo: ext.tipo || '',
+          status: insp.ok ? 'ok' : 'obs',
+          obs: insp.obs || '',
+          tecnico: TECNICOS[a] || '',
+          assinatura: insp.assinatura || '',
+          dt_assinatura: insp.dt_assinatura || null,
+          updated_at: new Date().toISOString()
+        });
+      });
+    }
+    for(let i = 0; i < rows.length; i += 50){
+      await enqueueSync('inspecoes', 'upsert', rows.slice(i, i + 50));
+    }
+    totalRows += rows.length;
+  }
+  showToast(`${totalRows} registros enfileirados para sync!`, false);
+  drainSyncQueue();
+  setTimeout(renderNuvem, 500);
 }
 
 // ══════════════════════════════════════════════
