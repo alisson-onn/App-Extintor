@@ -552,6 +552,7 @@ input,textarea{font-family:inherit}
   padding-bottom:env(safe-area-inset-bottom);
 }
 @keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+@keyframes slideRight{from{transform:translateX(-100%)}to{transform:translateX(0)}}
 .sheet-handle{width:40px;height:4px;background:var(--n200);border-radius:2px;margin:var(--sp3) auto 0}
 .sheet-title{font-size:var(--text-lg);font-weight:800;padding:var(--sp4) var(--sp5) var(--sp1)}
 .sheet-sub{font-size:var(--text-xs);color:var(--n500);padding:0 var(--sp5) var(--sp4);
@@ -1060,30 +1061,6 @@ input,textarea{font-family:inherit}
         Configurações
       </div>
 
-      <!-- Supabase -->
-      <div style="margin-bottom:var(--sp4)">
-        <div style="font-size:var(--text-sm);font-weight:700;color:var(--n700);margin-bottom:var(--sp2);display:flex;align-items:center;gap:6px">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.2 15c.7-1.2 1-2.5.7-3.9-.6-2-2.4-3.5-4.4-3.6C15.9 5.6 14.3 4 12 4a6.1 6.1 0 0 0-6 6C4 11 2 13 2 15s2 3 4 3h12c2 0 3-1 3.2-3z"/></svg>
-          Supabase (sincronização em nuvem)
-        </div>
-        <div class="form-grid">
-          <div>
-            <label class="form-label">URL do projeto *</label>
-            <input class="form-input" type="url" id="cfg-sb-url" placeholder="https://xxxxxxxxxxx.supabase.co" value="">
-          </div>
-          <div>
-            <label class="form-label">Chave anon/public *</label>
-            <input class="form-input" type="password" id="cfg-sb-key" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." value="">
-          </div>
-        </div>
-        <div id="cfg-sb-status" style="font-size:11px;margin-top:var(--sp1);color:var(--n500)"></div>
-        <div style="display:flex;gap:8px;margin-top:var(--sp2)">
-          <button class="export-btn primary" onclick="saveSupabaseConfig()">Salvar configuração</button>
-          <button class="export-btn" onclick="testSupabaseConnection()">Testar conexão</button>
-          <button class="export-btn" onclick="clearSupabaseConfig()" style="color:var(--danger)">Remover</button>
-        </div>
-      </div>
-
       <div style="border-top:1px solid var(--n200);padding-top:var(--sp4)">
         <div class="config-title" style="font-size:var(--text-sm);margin-bottom:var(--sp2)">Técnicos responsáveis por área</div>
         <div id="configRows"></div>
@@ -1168,7 +1145,6 @@ input,textarea{font-family:inherit}
     <div id="mobileMenuItems"></div>
   </div>
 </div>
-@keyframes slideRight{from{transform:translateX(-100%)}to{transform:translateX(0)}}
 
 <!-- ═══ CRUD EXTINTOR MODAL ═══ -->
 <div class="modal-overlay" id="crudOverlay" onclick="if(event.target===this)closeCrudModal()">
@@ -2291,68 +2267,6 @@ function renderConfig(){
     </div>`;
   }
   document.getElementById('configRows').innerHTML=html;
-  // Pre-fill Supabase fields
-  const urlEl = document.getElementById('cfg-sb-url');
-  const keyEl = document.getElementById('cfg-sb-key');
-  if(urlEl) urlEl.value = SUPABASE_URL;
-  if(keyEl) keyEl.value = SUPABASE_KEY;
-  updateSupabaseStatus();
-}
-
-function updateSupabaseStatus(){
-  const el = document.getElementById('cfg-sb-status');
-  if(!el) return;
-  if(supabaseEnabled()){
-    el.innerHTML = `<span style="color:var(--success)">✓ Supabase configurado</span> — URL: ${SUPABASE_URL.slice(0,40)}…`;
-  } else {
-    el.innerHTML = `<span style="color:var(--n400)">Não configurado — dados ficam apenas localmente</span>`;
-  }
-}
-
-function saveSupabaseConfig(){
-  const url = document.getElementById('cfg-sb-url')?.value?.trim();
-  const key = document.getElementById('cfg-sb-key')?.value?.trim();
-  if(!url || !key){ showToast('Preencha URL e chave do Supabase', false); return; }
-  SUPABASE_URL = url;
-  SUPABASE_KEY = key;
-  localStorage.setItem('sesmt_sb_url', url);
-  localStorage.setItem('sesmt_sb_key', key);
-  updateSupabaseStatus();
-  updateSyncBadge();
-  showToast('Configuração Supabase salva!', false);
-  if(navigator.onLine) drainSyncQueue();
-}
-
-async function testSupabaseConnection(){
-  const url = document.getElementById('cfg-sb-url')?.value?.trim();
-  const key = document.getElementById('cfg-sb-key')?.value?.trim();
-  if(!url||!key){ showToast('Preencha URL e chave primeiro', false); return; }
-  const el = document.getElementById('cfg-sb-status');
-  if(el) el.innerHTML = '<span style="color:#3B82F6">Testando conexão…</span>';
-  try{
-    const resp = await fetch(`${url}/rest/v1/`, { headers: { 'apikey': key, 'Authorization': `Bearer ${key}` } });
-    if(resp.ok || resp.status===200 || resp.status===404){
-      if(el) el.innerHTML = '<span style="color:var(--success)">✓ Conexão bem-sucedida!</span>';
-      showToast('Supabase conectado com sucesso!', false);
-    } else {
-      throw new Error(`HTTP ${resp.status}`);
-    }
-  } catch(err){
-    if(el) el.innerHTML = `<span style="color:var(--danger)">Falha: ${err.message}</span>`;
-    showToast('Falha na conexão — verifique URL e chave', false);
-  }
-}
-
-function clearSupabaseConfig(){
-  if(!confirm('Remover configuração do Supabase? Dados continuarão salvos localmente.')) return;
-  SUPABASE_URL=''; SUPABASE_KEY='';
-  localStorage.removeItem('sesmt_sb_url');
-  localStorage.removeItem('sesmt_sb_key');
-  const urlEl=document.getElementById('cfg-sb-url'); if(urlEl) urlEl.value='';
-  const keyEl=document.getElementById('cfg-sb-key'); if(keyEl) keyEl.value='';
-  updateSupabaseStatus();
-  updateSyncBadge();
-  showToast('Configuração Supabase removida', false);
 }
 
 function saveTecnicos(){
@@ -2811,8 +2725,8 @@ function patchDashboardExportBtn(){
 // ══════════════════════════════════════════════
 // SUPABASE CONFIG
 // ══════════════════════════════════════════════
-let SUPABASE_URL = localStorage.getItem('sesmt_sb_url') || '';
-let SUPABASE_KEY = localStorage.getItem('sesmt_sb_key') || '';
+let SUPABASE_URL = 'https://jeqdnxowrvvfbcwbmbob.supabase.co';
+let SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImplcWRueG93cnZ2ZmJjd2JtYm9iIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI4MjQ3NDgsImV4cCI6MjA4ODQwMDc0OH0._7NGndRXcrqmh5Xx8873-ydteUx9zbM-m-tS8uaSACA';
 function supabaseEnabled(){ return !!(SUPABASE_URL && SUPABASE_KEY); }
 function supabaseHeaders(){
   return {
@@ -2964,12 +2878,6 @@ async function updateSyncBadge(forcedState){
 
   const badge = document.getElementById('syncStatusBadge');
   if(!badge) return;
-  if(!supabaseEnabled()){
-    badge.className='sync-status-badge cfg';
-    badge.title='Supabase não configurado';
-    badge.innerHTML=`<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg> Config`;
-    return;
-  }
   if(forcedState==='syncing' || pending > 0){
     badge.className='sync-status-badge syncing';
     badge.title=`${pending} operação(ões) sendo sincronizadas`;
@@ -3025,7 +2933,6 @@ async function renderNuvem(){
   const done    = all.filter(i=>i.status==='done');
   const isOnline = navigator.onLine;
 
-  const sbOk = supabaseEnabled();
   const connColor = isOnline ? '#22C55E' : '#F59E0B';
   const connLabel = isOnline ? 'Online' : 'Offline';
 
@@ -3049,12 +2956,7 @@ async function renderNuvem(){
     </div>
   </div>`;
 
-  if(!sbOk){
-    html += `<div class="nuvem-alert warn">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-      Supabase não configurado. Vá em <strong>Configurações → Supabase</strong> para inserir a URL e chave de API.
-    </div>`;
-  } else if(!isOnline){
+  if(!isOnline){
     html += `<div class="nuvem-alert warn">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 6s4-4 11-4 11 4 11 4"/><path d="M5 10s2.5-2.5 7-2.5 7 2.5 7 2.5"/><path d="M9 14s1-1 3-1 3 1 3 1"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
       Sem conexão com a internet. Os dados ficam salvos localmente e serão sincronizados automaticamente quando reconectar.
@@ -3068,7 +2970,7 @@ async function renderNuvem(){
 
   const actionRow = `
   <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:var(--sp3)">
-    ${sbOk && isOnline ? `<button class="export-btn primary" onclick="drainSyncQueue().then(renderNuvem)">
+    ${isOnline ? `<button class="export-btn primary" onclick="drainSyncQueue().then(renderNuvem)">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.08-8.92"/></svg>
       Sincronizar agora
     </button>` : ''}
