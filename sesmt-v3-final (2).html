@@ -2811,8 +2811,8 @@ function patchDashboardExportBtn(){
 // ══════════════════════════════════════════════
 // SUPABASE CONFIG
 // ══════════════════════════════════════════════
-let SUPABASE_URL = localStorage.getItem('sesmt_sb_url') || '';
-let SUPABASE_KEY = localStorage.getItem('sesmt_sb_key') || '';
+let SUPABASE_URL = localStorage.getItem('sesmt_sb_url') || 'https://jeqdnxowrvvfbcwbmbob.supabase.co';
+let SUPABASE_KEY = localStorage.getItem('sesmt_sb_key') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImplcWRueG93cnZ2ZmJjd2JtYm9iIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI4MjQ3NDgsImV4cCI6MjA4ODQwMDc0OH0._7NGndRXcrqmh5Xx8873-ydteUx9zbM-m-tS8uaSACA';
 function supabaseEnabled(){ return !!(SUPABASE_URL && SUPABASE_KEY); }
 function supabaseHeaders(){
   return {
