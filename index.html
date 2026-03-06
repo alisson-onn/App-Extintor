@@ -2801,7 +2801,7 @@ async function drainSyncQueue(){
     for(const item of pending){
       if(item.attempts >= 5){
         item.status = 'failed';
-        item.error  = `Máximo de tentativas atingido (${item.attempts})`;
+        item.error  = `Máximo de tentativas atingido — clique em "Tentar falhas novamente" para reprocessar`;
         await idbPut(item);
         continue;
       }
@@ -2839,22 +2839,40 @@ async function drainSyncQueue(){
 
 async function executeSyncOp(item){
   const base = `${SUPABASE_URL}/rest/v1/${item.table}`;
-  let url, method, body;
+  let url, method, body, prefer;
   if(item.op === 'upsert'){
-    url = base + '?on_conflict=id';
+    url = base;
     method = 'POST';
-    body = JSON.stringify(Array.isArray(item.payload) ? item.payload : [item.payload]);
+    // Supabase upsert: POST + Prefer resolution=merge-duplicates
+    prefer = 'resolution=merge-duplicates,return=minimal';
+    const rows = Array.isArray(item.payload) ? item.payload : [item.payload];
+    // Sanitize: remove undefined values that break JSON schema validation
+    body = JSON.stringify(rows.map(r => {
+      const clean = {};
+      Object.entries(r).forEach(([k,v]) => { if(v !== undefined) clean[k] = v; });
+      return clean;
+    }));
   } else if(item.op === 'delete'){
     url = base + `?id=eq.${item.payload.id}`;
     method = 'DELETE';
+    prefer = 'return=minimal';
     body = null;
   } else {
     throw new Error(`op desconhecido: ${item.op}`);
   }
-  const resp = await fetch(url, { method, headers: {...supabaseHeaders(), 'Prefer':'resolution=merge-duplicates,return=minimal'}, body });
+  const resp = await fetch(url, {
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+      'apikey': SUPABASE_KEY,
+      'Authorization': `Bearer ${SUPABASE_KEY}`,
+      'Prefer': prefer
+    },
+    body
+  });
   if(!resp.ok){
     const txt = await resp.text();
-    throw new Error(`HTTP ${resp.status}: ${txt.slice(0,120)}`);
+    throw new Error(`HTTP ${resp.status}: ${txt.slice(0,200)}`);
   }
 }
 
@@ -3021,6 +3039,7 @@ async function retryOne(itemId){
   if(!item) return;
   item.status='pending';
   item.error=null;
+  item.attempts=0; // reset contador para tentar de novo
   await idbPut(item);
   drainSyncQueue();
   renderNuvem();
@@ -3029,7 +3048,9 @@ async function retryOne(itemId){
 async function retryAllFailed(){
   const all = await idbGetAll();
   for(const item of all.filter(i=>i.status==='failed')){
-    item.status='pending'; item.error=null;
+    item.status='pending';
+    item.error=null;
+    item.attempts=0; // reset contador para tentar de novo
     await idbPut(item);
   }
   drainSyncQueue();
