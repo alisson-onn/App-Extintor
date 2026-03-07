@@ -3406,3 +3406,74 @@ idbOpen().then(()=>{
 </script>
 </body>
 </html>
+
+// ══════════════════════════════════════════════
+// RELATÓRIO EXECUTIVO EM PDF
+// ══════════════════════════════════════════════
+function generateExecutiveReport(){
+  showToast('Gerando relatório executivo... Por favor, aguarde.', false);
+  
+  const exts = getExtintores().map(recalcExtStatus);
+  const total = exts.length;
+  const validos = exts.filter(e=>e.status==='Válido').length;
+  const vencidos = exts.filter(e=>e.status==='Vencido').length;
+  const a_vencer = exts.filter(e=>e.status==='Próximo ao vencimento').length;
+  
+  // Contar inspecionados
+  let inspecionados = 0;
+  const k = monthKey();
+  for(let a=1;a<=8;a++){
+    inspecionados += Object.keys(getAreaInsp(a)).length;
+  }
+  
+  // Coletar observações críticas
+  const observations = [];
+  if(vencidos > 0){
+    observations.push(vencidos + ' extintor(es) vencido(s) - Ação imediata necessária');
+  }
+  if(a_vencer > 0){
+    observations.push(a_vencer + ' extintor(es) a vencer nos próximos 90 dias');
+  }
+  
+  const k_parts = k.split('-');
+  const y = parseInt(k_parts[0]);
+  const m = parseInt(k_parts[1]);
+  
+  // Dados para o relatório
+  const reportData = {
+    period_start: new Date(y, m-1, 1).toLocaleDateString('pt-BR'),
+    period_end: new Date().toLocaleDateString('pt-BR'),
+    supervisor: TECNICOS[1] || 'Supervisor SESMT',
+    tecnicos: Object.values(TECNICOS).filter(t=>t).slice(0,4),
+    total_extintores: total,
+    validos: validos,
+    vencidos: vencidos,
+    a_vencer: a_vencer,
+    inspecionados: inspecionados,
+    observations: observations.length > 0 ? observations : ['Nenhuma observação crítica registrada'],
+    extintores: exts.slice(0, 50)
+  };
+  
+  // Enviar para backend gerar PDF
+  fetch('/api/generate-report', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(reportData)
+  })
+  .then(res=>res.blob())
+  .then(blob=>{
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'relatorio_executivo_' + new Date().toISOString().slice(0,10) + '.pdf';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast('Relatório gerado com sucesso!', false);
+  })
+  .catch(err=>{
+    console.error('Erro ao gerar relatório:', err);
+    showToast('Erro ao gerar relatório. Tente novamente.', true);
+  });
+}
